@@ -3,13 +3,17 @@ const AuthUsers = require('../models/user.model')
 
 
 const secureRoute = async (req, res, next) => {
-    try {
+   
         const token = req.cookies.jwt
+
+        
         if (!token) {
             return res.status(401).json({ message: "Not authorized" });
         }
 
         const verified = jwt.verify(token, process.env.JWT_TOKEN,)
+
+        // console.log(verified)
 
         if (!verified) {
             return res.status(403).json({ message: "Invalid token" })
@@ -26,10 +30,9 @@ const secureRoute = async (req, res, next) => {
         next();
 
 
-    } catch (error) {
-
-        return res.status(501).json({ message: "Internal server error" });
-    }
 }
 
+
 module.exports = { secureRoute };
+
+

@@ -5,13 +5,11 @@ const validatetoken = ((req, res, next) => {
 
     // const {token}
 
-   
-
     if (!req.cookies.jwt) {
         return res.redirect('/login')
     }
 
-
+   
 
     const userinfo = jwt.verify(req.cookies.jwt, process.env.JWT_TOKEN,)
 
@@ -35,3 +33,4 @@ module.exports = validatetoken
 
 
 
+ 
