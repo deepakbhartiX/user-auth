@@ -26,20 +26,13 @@ const userScheme = mongodb.Schema({
 
     },
 
-    profileImage: { type: Buffer },
-    profileImageType: { type: String },
-
+    picurl: { type: String },
    
 
 
 }, { timestamp: true })
 
 
-userScheme.virtual("profileImagePath").get(function () {
-    if (this.profileImage != null && this.profileImageType != null) {
-        return `data:${this.profileImageType};base64,${this.profileImage.toString("base64")}`;
-    }
-});
 
 
 module.exports = mongodb.model('AuthUsers', userScheme)

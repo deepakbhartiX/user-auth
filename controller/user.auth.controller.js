@@ -7,8 +7,11 @@ const createTokenAndCookie = require('../jwt/user.auth.token');
 const AppError = require('../utils/AppError');
 const { response } = require('express');
 
+const multer = require("multer");
 
+const { streamupload } = require('./user.pic.upload.controller')
 let otpStore = {};  //store otp for temp
+
 
 
 
@@ -59,7 +62,7 @@ const sendOtp = async (req, res) => {
     //storing db fethch data for express limiter skip request
     existedNumbr = Boolean(Otpexist)
 
-    
+
 
     if (Otpexist) {
         res.json({ status: false, message: "Mobile Number already exist" })
@@ -87,17 +90,17 @@ let existedNumbr
 const limiter = rateLimit({
     windowMs: 30 * 1000,
     limit: 1,
-    skip:(request,response)=>{
+    skip: (request, response) => {
         return existedNumbr
-    } ,
+    },
     handler: (req, res) => {
         throw new AppError("Wait for few second for OTP", 429)
     },
- 
+
     // message:"To Many API request", 
 })
 
-  
+
 
 
 //  Verify OTP
@@ -110,7 +113,7 @@ const verifyOtp = (req, res) => {
     }
 
 
- 
+
 
 
     if (otpStore[mobile] == otp) {
@@ -139,15 +142,17 @@ const verifyOtp = (req, res) => {
 const sign = async (req, res) => {
 
 
+
     const { name, email, password } = req.body;
 
 
 
-    if (Object.values(otpStore)[0] !== "VERIFIED") {
 
-        throw new AppError("Mobile Number Not Verified Please Verify OTP First", 403)
+    // if (Object.values(otpStore)[0] !== "VERIFIED") {
 
-    }
+    //     throw new AppError("Mobile Number Not Verified Please Verify OTP First", 403)
+
+    // }
 
 
     const user = await AuthUsers.findOne({ email })
@@ -162,14 +167,16 @@ const sign = async (req, res) => {
     const hashedpassword = await bcrypt.hash(password, 10)
 
 
+    let cloudresult = await streamupload(req.file.buffer)
+
+    console.log(cloudresult)
+
     const newUser = await new AuthUsers({
         name,
         email,
         mobile: Object.keys(otpStore)[0],
         password: hashedpassword,
-        profileImage: req.file.buffer,       // save binary data
-        profileImageType: req.file.mimetype, // save type (jpg/png)
-
+        picurl:cloudresult.secure_url,
 
     })
 
@@ -189,8 +196,7 @@ const sign = async (req, res) => {
                 name: newUser.name,
                 email: newUser.email,
                 mobile: newUser.mobile,
-                profile: newUser.profileImageType,
-
+                picurl:newUser.picurl
             }
         })
     }
@@ -249,6 +255,7 @@ const logout = async (req, res) => {
 
 
 module.exports = { sign, login, logout, sendOtp, verifyOtp, limiter }
+
 
 
 
