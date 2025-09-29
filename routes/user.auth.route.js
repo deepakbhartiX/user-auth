@@ -6,8 +6,8 @@ const {limiter} = require('../controller/user.auth.controller')
 const multer = require("multer");
 const asyncHandler = require('../utils/asyncHandler');
 const AppError = require('../utils/AppError');
-const { uplaodImage} = require('../controller/user.pic.upload.controller');
-const {upload} = require('../controller/user.pic.upload.controller')
+const { uplaodImage} = require('../controller/user.pic.controller');
+const {upload} = require('../controller/user.pic.controller')
 
 //injecting route
 

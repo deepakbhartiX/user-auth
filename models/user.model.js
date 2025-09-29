@@ -26,7 +26,7 @@ const userScheme = mongodb.Schema({
 
     },
 
-    picurl: { type: String },
+    photo_public_id: { type: String },
    
 
 

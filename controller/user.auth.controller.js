@@ -9,11 +9,11 @@ const { response } = require('express');
 
 const multer = require("multer");
 
-const { streamupload } = require('./user.pic.upload.controller')
+const { streamupload } = require('./user.pic.controller')
 let otpStore = {};  //store otp for temp
 
 
-
+const cloudinary = require('cloudinary').v2
 
 // Mobile validation (10 digits, starts 6-9 for India)
 
@@ -168,15 +168,30 @@ const sign = async (req, res) => {
 
 
     let cloudresult = await streamupload(req.file.buffer)
+    // console.log(cloudresult)
 
-    console.log(cloudresult)
+
+     //sotred pubic_id of pic use to genrerate custom size avatar pic 
+ 
+    const avatarUrl = cloudinary.url(cloudresult.public_id, {
+        width: 400,
+        height: 400,
+        crop: "fill",
+        gravity: "face",
+        radius: "max",
+        quality: "auto",
+        fetch_format: "auto"
+    });
+
+    // console.log(avatarUrl);
+    // console.log(cloudresult)
 
     const newUser = await new AuthUsers({
         name,
         email,
         mobile: Object.keys(otpStore)[0],
         password: hashedpassword,
-        picurl:cloudresult.secure_url,
+        photo_public_id: cloudresult.public_id,
 
     })
 
@@ -196,8 +211,10 @@ const sign = async (req, res) => {
                 name: newUser.name,
                 email: newUser.email,
                 mobile: newUser.mobile,
-                picurl:newUser.picurl
             }
+            ,
+            picURL: avatarUrl,
+
         })
     }
 
@@ -228,7 +245,19 @@ const login = async (req, res) => {
         // return res.status(404).json({ Error: "password wrong" })
     }
 
+    //sotred pubic_id of pic use to genrerate custom size avatar pic 
 
+     const avatarUrl = await cloudinary.url(valibate.photo_public_id, {
+        width: 400,
+        height: 400,
+        crop: "fill",
+        gravity: "face",
+        radius: "max",
+        quality: "auto",
+        fetch_format: "auto"
+    });
+
+    // console.log(avatarUrl)
     createTokenAndCookie(valibate._id, res)
 
     return res.status(201).json({
@@ -236,7 +265,12 @@ const login = async (req, res) => {
             _id: valibate._id,
             name: valibate.name,
             email: valibate.email,
-        }
+
+        },
+
+        picURL:avatarUrl
+
+
     })
 
 
