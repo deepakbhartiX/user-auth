@@ -1,278 +1,94 @@
-const bcrypt = require('bcrypt')
-
 const AuthUsers = require('../models/user.model')
-const { rateLimit } = require('express-rate-limit');
-
-const createTokenAndCookie = require('../jwt/user.auth.token');
 const AppError = require('../utils/AppError');
-const { response } = require('express');
 
-const multer = require("multer");
-
-const { streamupload } = require('./user.pic.controller')
-let otpStore = {};  //store otp for temp
-
-
-const cloudinary = require('cloudinary').v2
-
-// Mobile validation (10 digits, starts 6-9 for India)
-
-function isValidMobile(mobile) {
-    return /^[6-9]\d{9}$/.test(mobile);
-}
+//importing sms logic
+const sms = require('../services/otpService')
+//importing signup and login logic
+const auth = require('../services/authService')
 
 
+//sms logic
 
-// Generate random 4-digit OTP
-function generateOtp() {
-    return Math.floor(1000 + Math.random() * 9000);
-}
-
-
-
-//  Send OTP
 const sendOtp = async (req, res) => {
 
+    const sendOtp = await sms.sendOtp(req)
 
-    const { mobile } = req.body;
-
-
-    if (!mobile || !isValidMobile(mobile)) {
-        throw new AppError("Invalid mobile Number", 400)
-    }
-
-
-    const otp = generateOtp();
-    otpStore[mobile] = otp;
-
-
-
-    //deleting 1st element in otpStore Object to get remains latest element which used for fetch from db
-
-    if (Object.keys(otpStore).length > 1) {
-        delete otpStore[Object.keys(otpStore)[0]]
-        // console.log(Object.keys(otpStore))
-    }
-
-
-
-    const Otpexist = await AuthUsers.findOne({ mobile: Object.keys(otpStore) })
-
-
-    //storing db fethch data for express limiter skip request
-    existedNumbr = Boolean(Otpexist)
-
-
-
-    if (Otpexist) {
+    if (sendOtp === true) {
         res.json({ status: false, message: "Mobile Number already exist" })
     }
 
     else {
-        console.log(`Mock OTP for ${mobile}: ${otp}`); // replace with SMS API later
+        console.log(`Mock OTP for ${sendOtp.mobile} : ${sendOtp.otp}`); // replace with SMS API later
 
         res.json({ message: "OTP sent (mock)" });
-
     }
+}
 
+const verifyOTP = async (req, res) => {
 
-
-
-};
-
-
-
-//for skipping request for exist phone number
-
-let existedNumbr
-
-// OTP rate limiter for 5 sec 
-const limiter = rateLimit({
-    windowMs: 30 * 1000,
-    limit: 1,
-    skip: (request, response) => {
-        return existedNumbr
-    },
-    handler: (req, res) => {
-        throw new AppError("Wait for few second for OTP", 429)
-    },
-
-    // message:"To Many API request", 
-})
-
-
-
-
-//  Verify OTP
-const verifyOtp = (req, res) => {
-    const { mobile, otp } = req.body;
-
-    if (!mobile || !isValidMobile(mobile)) {
-        throw new AppError("Invalid Mobile Number", 400)
-
-    }
-
-
-
-
-
-    if (otpStore[mobile] == otp) {
-        otpStore[mobile] = "VERIFIED"; // mark as verified
-        otpStore = ""
+    const verify = await sms.verifyOtp(req)
+    // console.log(verify)
+    if (verify) {
         return res.json({
             success: true, message: "OTP verified",
-            mobile: Object.keys(otpStore)
+
         });
-
     }
-
-
-
-    else {
-
-        throw new AppError("Invalid OTP", 400)
-
+    else{
+        return res.status(401).json({
+            success:false,message:"Invalid OTP"
+        })
     }
-};
+}
 
 
-// Signup (only if OTP verified)
-
-
+//user auth logic
 const sign = async (req, res) => {
 
 
-
-    const { name, email, password } = req.body;
-
+    const sign = await auth.sign(req)
 
 
-
-    // if (Object.values(otpStore)[0] !== "VERIFIED") {
-
-    //     throw new AppError("Mobile Number Not Verified Please Verify OTP First", 403)
-
-    // }
-
-
-    const user = await AuthUsers.findOne({ email })
-
-    if (user) {
-
-        throw new AppError("Email alraedy exist", 400)
-
-    }
-
-
-    const hashedpassword = await bcrypt.hash(password, 10)
-
-
-    let cloudresult = await streamupload(req.file.buffer)
-    // console.log(cloudresult)
-
-
-     //sotred pubic_id of pic use to genrerate custom size avatar pic 
- 
-    const avatarUrl = cloudinary.url(cloudresult.public_id, {
-        width: 400,
-        height: 400,
-        crop: "fill",
-        gravity: "face",
-        radius: "max",
-        quality: "auto",
-        fetch_format: "auto"
-    });
-
-    // console.log(avatarUrl);
-    // console.log(cloudresult)
-
-    const newUser = await new AuthUsers({
-        name,
-        email,
-        mobile: Object.keys(otpStore)[0],
-        password: hashedpassword,
-        photo_public_id: cloudresult.public_id,
-
-    })
-
-
-
-    newUser.save();
-
-    otpStore = {} // clear after signup
-
-
-
-    if (newUser) {
-        createTokenAndCookie(newUser._id, res)
-        return res.status(201).json({
+    return res.status(201).cookie('jwt', sign.token, {
+        httpOnly: true, //xss attacks
+        secure: true,
+        sameSite: "strict", //csrf attack
+    }).json(
+        {
             message: 'User Registered sucessfully', user: {
-                _id: newUser._id,
-                name: newUser.name,
-                email: newUser.email,
-                mobile: newUser.mobile,
+                _id: sign.newUser._id,
+                name: sign.newUser.name,
+                email: sign.newUser.email,
+                mobile: sign.newUser.mobile,
             }
             ,
-            picURL: avatarUrl,
-
-        })
-    }
+            picURL: sign.avatarUrl,
+        }
+    )
 
 
 }
 
-
-//login controller logic
-
-
 const login = async (req, res) => {
 
-
-    const { email, password } = req.body;
-
-    const valibate = await AuthUsers.findOne({ email })
-
-
-    if (!valibate) {
-        throw new AppError("user not found", 404)
-        // return res.status(404).json({ Error: 'user not found' })
-    }
-
-    const compare = await bcrypt.compare(password, valibate.password)
-
-    if (!compare) {
-        throw new AppError("password wrong", 404)
-        // return res.status(404).json({ Error: "password wrong" })
-    }
-
-    //sotred pubic_id of pic use to genrerate custom size avatar pic 
-
-     const avatarUrl = await cloudinary.url(valibate.photo_public_id, {
-        width: 400,
-        height: 400,
-        crop: "fill",
-        gravity: "face",
-        radius: "max",
-        quality: "auto",
-        fetch_format: "auto"
-    });
-
-    // console.log(avatarUrl)
-    createTokenAndCookie(valibate._id, res)
-
-    return res.status(201).json({
+    const login = await auth.login(req)
+    // console.log(login.avatarUrl)
+    return res.status(201).cookie('jwt', login.token, {
+        httpOnly: true, //xss attacks
+        secure: true,
+        sameSite: "strict", //csrf attack
+    }).json({
         message: 'User login', user: {
-            _id: valibate._id,
-            name: valibate.name,
-            email: valibate.email,
+            _id: login.valibate._id,
+            name: login.valibate.name,
+            email: login.valibate.email,
 
         },
 
-        picURL:avatarUrl
+        picURL: login.avatarUrl
 
 
     })
-
 
 }
 
@@ -281,14 +97,22 @@ const login = async (req, res) => {
 
 const logout = async (req, res) => {
 
-    res.clearCookie('jwt');
-    return res.status(200).json({ message: "user logged out sucessfully" })
+    const logout = await auth.logout()
+
+
+    return res.status(200).logout.json({ message: "user logged out sucessfully" })
+
+
+
+    // res.clearCookie('jwt');
+    // return res.status(200).json({ message: "user logged out sucessfully" })
+
 
 }
 
 
 
-module.exports = { sign, login, logout, sendOtp, verifyOtp, limiter }
+module.exports = { sign, login, logout, sendOtp, verifyOTP }
 
 
 

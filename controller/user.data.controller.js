@@ -1,7 +1,7 @@
 
 const AuthUsers = require('../models/user.model')
+const users  = require('../services/userService')
 
-const path = require('path')
 
 
 //api route to get all user from db 
@@ -9,23 +9,11 @@ const path = require('path')
 
 const getallUsers = async (req, res) => {
 
-
-    const loggedInUser = req.user._id;
-    const filterUsers = await AuthUsers.find({
-        _id: { $ne: loggedInUser },
-    }).select("-password").select("-profileImage")
-
-    return res.status(201).json({ filterUsers })
-
+    const result = await users.getall(req)
+    return res.status(201).json(result)
+   
 }
 
-
-
-// console.log("helo")
-
-
-
-// const lol = 'C:\Users\Deepak Bharti\Desktop\user auth\controller/VSBQmL5wk.webp'
 
 
 
